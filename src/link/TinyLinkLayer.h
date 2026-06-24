@@ -129,6 +129,36 @@ public:
     }
 
     /**
+     * Request the link layer to abort an in-flight Tx that cannot make
+     * progress.  Set by Proto::end() before it joins the send thread, so a
+     * runTx() blocked retrying a write to an unresponsive peer (e.g. the device
+     * reset and stopped draining its buffer) bails out instead of spinning
+     * forever — which would otherwise hang end()'s join() and any
+     * reconnect/cleanup/shutdown waiting on it.
+     */
+    void requestTxAbort()
+    {
+        m_txAborting = true;
+    }
+
+    /**
+     * Clear the Tx-abort request.  Called by Proto::begin() so a reused link
+     * does not start with a stale abort from a previous session.
+     */
+    void clearTxAbort()
+    {
+        m_txAborting = false;
+    }
+
+    /**
+     * Whether a Tx-abort has been requested (teardown in progress).
+     */
+    bool txAborting() const
+    {
+        return m_txAborting;
+    }
+
+    /**
      * Default virtual destructor
      */
     virtual ~ILinkLayer() = default;
@@ -136,6 +166,9 @@ public:
 private:
     int m_mtu = 16384;
     uint32_t m_timeout = 0;
+    // Read on the send thread, written on the thread calling end(); the
+    // pattern mirrors Proto::m_terminate (plain bool guarded by the join).
+    volatile bool m_txAborting = false;
 };
 
 } // namespace tinyproto

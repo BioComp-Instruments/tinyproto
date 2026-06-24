@@ -82,6 +82,7 @@ bool Proto::begin()
     if ( m_multithread )
     {
         m_terminate = false;
+        m_link->clearTxAbort();
         m_readThread = new std::thread(&Proto::runRx, this);
         m_sendThread = new std::thread(&Proto::runTx, this);
     }
@@ -182,6 +183,14 @@ void Proto::end()
         return;
     }
     m_terminate = true;
+    // Tell the link layer to abort a stuck Tx BEFORE joining the send thread.
+    // runTx() retries a write until the whole frame is sent; if the peer is
+    // unresponsive that retry never completes, so without this the join() below
+    // would hang forever (and with it any reconnect/cleanup/shutdown).
+    if ( m_link )
+    {
+        m_link->requestTxAbort();
+    }
 #if CONFIG_TINYHAL_THREAD_SUPPORT == 1
     if ( m_sendThread )
     {
