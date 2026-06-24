@@ -92,6 +92,20 @@ public:
             {
                 break;
             }
+            // sent == 0 means the port was not writable within the write
+            // timeout (e.g. the peer reset and stopped draining its buffer).
+            // During normal operation keep retrying so the frame is delivered
+            // intact. But if a teardown is in progress (Proto::end() set the
+            // abort flag before joining this thread), bail out instead of
+            // spinning forever — otherwise this loop never returns, the proto's
+            // `while(!m_terminate) runTx()` never re-checks m_terminate, and
+            // end()'s join() (and any reconnect/cleanup/shutdown behind it)
+            // hangs. The dropped frame is re-sent by the windowed, CRC-checked
+            // link layer on the next session.
+            if ( sent == 0 && this->txAborting() )
+            {
+                break;
+            }
             ptr += sent;
             len -= sent;
         }
