@@ -85,6 +85,15 @@ public:
 
     void setTxCallback(void (*onTx)(Proto &, IPacket &));
 
+    /// Opaque user pointer carried with this Proto instance.  The rx/tx
+    /// callbacks are raw function pointers (no captures), so a consumer stashes
+    /// its owning object here and recovers it via getUserData() inside the
+    /// callback — removing the need for an external Proto*->owner map and its
+    /// locking.
+    void setUserData(void *userData) { m_userData = userData; }
+
+    void *getUserData() const { return m_userData; }
+
 #if CONFIG_TINYHAL_THREAD_SUPPORT == 1
     void setTxDelay( uint32_t delay );
 
@@ -95,6 +104,7 @@ private:
     ILinkLayer *m_link = nullptr;
     void (*m_onRx)(Proto &, IPacket &) = nullptr;
     void (*m_onTx)(Proto &, IPacket &) = nullptr;
+    void *m_userData = nullptr;
     bool m_multithread = false;
     bool m_terminate = true;
     IPacket *m_pool = nullptr;
