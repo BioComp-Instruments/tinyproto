@@ -90,6 +90,19 @@ public:
         m_userData = userData;
     }
 
+    /**
+     * Set the keep-alive timeout (ms). tiny_fd sends a keep-alive if idle this long,
+     * and declares the peer disconnected after 2x this with no frame received.
+     * Call after begin() (needs a live handle); no-op before.
+     */
+    void setKeepAliveTimeout(uint32_t keepAliveMs)
+    {
+        if ( m_handle )
+        {
+            tiny_fd_set_ka_timeout(m_handle, keepAliveMs);
+        }
+    }
+
 protected:
 
     int parseData(const uint8_t *data, int size);
