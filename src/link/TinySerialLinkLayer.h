@@ -85,6 +85,7 @@ public:
         uint8_t buf[BSIZE];
         int len = BASE::getData( buf, BSIZE );
         uint8_t *ptr = buf;
+        uint32_t startMs = tiny_millis();
         while ( len > 0 )
         {
             int sent = m_serial.write(ptr, len);
@@ -95,16 +96,24 @@ public:
             // sent == 0 means the port was not writable within the write
             // timeout (e.g. the peer reset and stopped draining its buffer).
             // During normal operation keep retrying so the frame is delivered
-            // intact. But if a teardown is in progress (Proto::end() set the
-            // abort flag before joining this thread), bail out instead of
-            // spinning forever — otherwise this loop never returns, the proto's
-            // `while(!m_terminate) runTx()` never re-checks m_terminate, and
-            // end()'s join() (and any reconnect/cleanup/shutdown behind it)
-            // hangs. The dropped frame is re-sent by the windowed, CRC-checked
-            // link layer on the next session.
-            if ( sent == 0 && this->txAborting() )
+            // intact. But this loop must not retry unbounded: ALL of tiny_fd's
+            // liveness machinery (keep-alive expiry, retransmit-exhaust
+            // disconnect) runs inside BASE::getData(), so a port that stays
+            // "open but never writable" (unplugged USB CDC device, flow-control
+            // stall) would otherwise freeze link-state detection forever.
+            // Bail on teardown (Proto::end() set the abort flag before joining
+            // this thread) or once the link-layer timeout has elapsed; the
+            // dropped frame is re-sent by the windowed, CRC-checked link layer.
+            if ( sent == 0 )
             {
-                break;
+                if ( this->txAborting() )
+                {
+                    break;
+                }
+                if ( (uint32_t)(tiny_millis() - startMs) >= this->getTimeout() )
+                {
+                    break;
+                }
             }
             ptr += sent;
             len -= sent;
